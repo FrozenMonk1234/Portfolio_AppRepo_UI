@@ -1,0 +1,119 @@
+﻿@page "/"
+@page "/LogIn"
+@using Portfolio_AppRepo_UI.Services.AuthenticationService
+@inject NavigationManager NavigationManager
+@inject Blazored.SessionStorage.ISessionStorageService _sessionStorage
+@inject IAuthService authService
+@inject CustomAuthenticationProvider AuthorizationProvider
+
+@if (showSpinner)
+{
+    <SpinnerModal Message="Authenticating..........Please wait........."></SpinnerModal>
+}
+
+@if (showError)
+{
+    <ErrorMessage Message="@errorMessage" />
+}
+
+<center>
+    <div class="card" style="width:400px;">
+        <center>
+            <img class="card-img-top" src="/images/Mpact_logo.png" style="height:142px; width:270px;" alt="MpactLogo">
+        </center>
+
+        <div class="card-body">
+            <EditForm Model="@loginModel" OnValidSubmit="@OnSubmit">
+                <DataAnnotationsValidator />
+                <div>
+                    <h3 style=" font-weight:bold; color:#a5c737"> Login</h3>
+                </div>
+                <div>
+                    <br />
+                </div>
+                <div class="col-12 row">
+                    <input class="form-control col-12" type="text" placeholder="Username" @bind="loginModel.Username" />
+                    <ValidationMessage For="@(() => loginModel.Username)"></ValidationMessage>
+                </div>
+                <br />
+                <div class="col-12 row">
+                    <input class="form-control  mb-4" type="password" placeholder="Password" @bind="loginModel.Password" />
+                    <ValidationMessage For="@(() => loginModel.Password)"></ValidationMessage>
+                </div>
+
+                <br />
+                <div class="col-12 row">
+                    <button class="btn btn-outline-info btn-rounded btn-block my-4 waves-effect z-depth-0"
+                            style="background-color:#a5c737; border-color:black; border-style:groove; color:black" type="submit">
+                        Sign in
+                    </button>
+                </div>
+                <br />
+                <div class="col-12 row" style="text-align:left; font-weight:bold">
+                    <span class="col-12">@LoginMessage</span>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</center>
+
+
+
+@code {
+    bool showSpinner = false;
+    bool showError = false;
+    string errorMessage = string.Empty;
+    LoginModel loginModel = new LoginModel();
+    public string? LoginMessage { get; set; }
+    LogWorker logWorker = new();
+    protected override async void OnInitialized()
+    {
+
+        base.OnInitialized();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            if (await _sessionStorage.ContainKeyAsync("UserCredit"))
+            {
+                await _sessionStorage.ClearAsync();
+                await authService.LogoutAsync();
+            }
+        }
+
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    public async Task OnSubmit()
+    {
+        showSpinner = true;
+        try
+        {
+            if (await authService.LoginAsync(loginModel))
+            {
+                showSpinner = false;
+                NavigationManager.NavigateTo("/Index");
+            }
+            else
+            {
+                showSpinner = false;
+                errorMessage = "Password or Username is incorrect.";
+                showError = true;
+            }
+        }
+        catch (Exception e)
+        {
+            logWorker.LogError(e);
+            showSpinner = false;
+            errorMessage = "Login Failed.";
+            showError = true;
+        }
+        finally
+        {
+            showSpinner = false;
+        }
+
+    }
+}

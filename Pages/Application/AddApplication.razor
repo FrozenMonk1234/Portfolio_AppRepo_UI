@@ -1,0 +1,460 @@
+﻿@page "/AddApplication"
+@inject Blazored.SessionStorage.ISessionStorageService sessionStorage
+@inject IApplicationService applicationService
+@inject NavigationManager NAvManager
+@inject CustomAuthenticationProvider AuthorizationProvider
+@using System.IO
+@using System.Web
+@using System.Security.Principal
+@using System.Diagnostics
+@inject IJSRuntime JS
+
+@if (showError == true)
+{
+    showSuccess = false;
+    <ErrorMessage Message="@errorMessage" />
+}
+
+@if (showSuccess == true)
+{
+    showError = false;
+    <SuccessMessage Message="@successMessage" />
+}
+
+@if (showSpinner == true)
+{
+    showError = false;
+    showSuccess = false;
+    <SpinnerModal Message="...Loading..." />
+}
+
+
+<center><h1>New Application Entry</h1></center>
+&nbsp;
+&nbsp;
+<div class="col-12">
+    <div class="row col-md-7 mb-3">
+        <div class="col-4">
+            <label><label style="color:red">*</label>Stage:</label>
+        </div>
+        <div class="col-md-6 row">
+            <div class="col-6" style="width:70%">
+                <select @bind="@resultModel.Stage" class="form-control">
+                    <option value="">select..</option>
+                    <option value="Dev">Development</option>
+                    <option value="UAT">UAT</option>
+                    <option value="Prod">Production</option>
+                </select>
+            </div>
+            <div class="row col-2">
+                <input @bind="resultModel.IsActive" type="checkbox" /> <label>IsActive</label>
+            </div>
+        </div>
+    </div>
+    <div class="row col-md-7 mb-3">
+        <div class="col-4">
+            <label><label style="color:red">*</label>Link (URL):</label>
+        </div>
+        <div class="col-lg-6">
+            <input type="text" class="form-control" style="width:100%;" @bind-value="resultModel.URL" />
+        </div>
+    </div>
+    <div class="row col-md-7 mb-3">
+        <div class="col-4">
+            <label><label style="color:red">*</label>Name:</label>
+        </div>
+        <div class="col-lg-6">
+            <input type="text" class="form-control" style="width:100%;" @bind-value="resultModel.Name" />
+        </div>
+    </div>
+    <div class=" row col-md-7 mb-3">
+        <div class="col-4">
+            <label>Description:</label>
+        </div>
+        <div class="col-lg-6">
+            <textarea rows="5" class="form-control" style="width:100%; height:150px" placeholder="" @bind="resultModel.Description"></textarea>
+        </div>
+    </div>
+</div>
+&nbsp;
+<h3>Add Endpoint URLs</h3>
+<AddURLReferenceComponent entryType="API" resultModel="@resultModel"></AddURLReferenceComponent>
+&nbsp;
+<AddURLReferenceComponent entryType="Service" resultModel="@resultModel"></AddURLReferenceComponent>
+
+<h3 style="margin-top:1.5rem;margin-bottom:1rem">Upload</h3>
+<div class="row col-12">
+    <div class="col-md-6">
+        <UploadComponent applicationName="@resultModel.Name" documentType="Project Proposal" fileUploadModels="fileUploadModels"></UploadComponent>
+        <UploadComponent applicationName="@resultModel.Name" documentType="Business Case" fileUploadModels="fileUploadModels"></UploadComponent>
+        <UploadComponent applicationName="@resultModel.Name" documentType="Business Requirement" fileUploadModels="fileUploadModels"></UploadComponent>
+    </div>
+    <div class="col-md-6">
+        <UploadComponent applicationName="@resultModel.Name" documentType="Technical Specification" fileUploadModels="fileUploadModels"></UploadComponent>
+        <UploadComponent applicationName="@resultModel.Name" documentType="Test Case" fileUploadModels="fileUploadModels"></UploadComponent>
+        <UploadComponent applicationName="@resultModel.Name" documentType="User Manual" fileUploadModels="fileUploadModels"></UploadComponent>
+    </div>
+</div>
+
+<div class="col-sm-7" style="margin-right:auto;margin-left:auto ;padding-bottom:5vh;padding-top:5vh">
+    <input type="button" class="btn btn-primary" style="min-width:fit-content;width:47%;font-size:18px" value="Save" @onclick="OnClickSave" />
+    <input type="button" class="btn btn-danger" style="min-width:fit-content;width:47%;font-size:18px" value="Cancel" @onclick="OnCancel" />
+</div>
+
+
+@if (showConfirm == true)
+{
+    showError = false;
+    showSuccess = false;
+    showSpinner = false;
+    <ConfirmActionModal Message="@ConfirmMessage" CloseModal="OnShowConfirmModal" Confirmed="OnConfirmed"></ConfirmActionModal>
+}
+
+@code {
+    bool? showSpinner { get; set; } = false;
+    bool? showError { get; set; } = false;
+    bool? showSuccess { get; set; } = false;
+    string? errorMessage = string.Empty;
+    string? successMessage = string.Empty;
+    bool? showConfirm = false;
+    string ConfirmMessage = string.Empty;
+
+    AddApplicationModel resultModel = new AddApplicationModel();
+    ApplicationFileModel fileModel = new ApplicationFileModel();
+    List<FileUploadModel> fileUploadModels = new List<FileUploadModel>();
+    LogWorker logWorker = new();
+    private void OnShowConfirmModal(bool status)
+    {
+        showConfirm = status;
+    }
+
+    protected override async void OnInitialized()
+    {
+        try
+        {
+            await IsAuthenticated();
+            var LoggedIn = await sessionStorage.GetItemAsync<UserModel>("UserCredit");
+            LoggedInUser = LoggedIn.Username;
+            await base.OnInitializedAsync();
+
+        }
+        catch (Exception e)
+        {
+            logWorker.LogError(e);
+            errorMessage = e.Message;
+            showError = (bool)true;
+        }
+
+    }
+
+    private async void OnConfirmed(bool status)
+    {
+        if (status)
+        {
+            OnShowConfirmModal(false);
+            await SaveAsync();
+        }
+    }
+
+    string? LoggedInUser = string.Empty;
+
+    private async Task IsAuthenticated()
+    {
+        var authState = await AuthorizationProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (!user.Identity.IsAuthenticated)
+        {
+            NAvManager.NavigateTo("/LogIn");
+        }
+    }
+
+    private async Task OnClickSave()
+    {
+        if (string.IsNullOrWhiteSpace(resultModel.Name))
+        {
+            errorMessage = "Please make sure you filled in all required fields.";
+            showError = true;
+            await BackToTop();
+        }
+        else if (string.IsNullOrWhiteSpace(resultModel.URL))
+        {
+            errorMessage = "Please make sure you filled in all required fields.";
+            showError = true;
+            await BackToTop();
+        }
+        else if (string.IsNullOrWhiteSpace(resultModel.Stage))
+        {
+            errorMessage = "Please make sure you filled in all required fields.";
+            showError = true;
+            await BackToTop();
+        }
+        else
+        {
+            ConfirmMessage = "Are you sure you want to save this?";
+            var result = await applicationService.GetApplicationExistanceCheck(resultModel.Name);
+            if (result.Any())
+            {
+                ConfirmMessage += " We found these similar applications: ";
+                foreach (var item in result)
+                {
+                    ConfirmMessage += $"{item.Name}, ";
+                }
+            }
+            OnShowConfirmModal(true);
+        }
+
+    }
+
+    public async Task SaveAsync()
+    {
+        showSpinner = true;
+        try
+        {
+            var fileRecordModel = BuildFileRecordModel(fileUploadModels);
+            resultModel.FileNameModel = fileRecordModel;
+            resultModel.User = LoggedInUser;
+            var appId = await applicationService.Create(resultModel);
+            if (appId > 0)
+            {
+                if (fileUploadModels.Any())
+                {
+                    var uploadResult = UploadFiles(appId, fileUploadModels);
+                }
+                resultModel = new AddApplicationModel();
+                successMessage = $"{resultModel.Name} added successfully";
+                showSuccess = true;
+                await Task.Delay(4000);
+                NAvManager.NavigateTo("/index");
+            }
+            else
+            {
+                errorMessage = "Unable to create";
+                showError = true;
+            }
+
+        }
+        catch (Exception? e)
+        {
+            logWorker.LogError(e);
+            errorMessage = e.Message;
+            showError = (bool)true;
+            await BackToTop();
+
+        }
+        finally
+        {
+            showSpinner = false;
+            this.StateHasChanged();
+        }
+    }
+
+    private void OnCancel()
+    {
+        NAvManager.NavigateTo("/Index");
+    }
+
+    public ApplicationFileModel BuildFileRecordModel(List<FileUploadModel> models)
+    {
+        var result = new ApplicationFileModel();
+        result.ApplicationName = result.ApplicationName;
+        foreach (var item in models)
+        {
+            var nameOf = item.DocumentType;
+            if (item.DocumentType == "ProjectProposal")
+            {
+                result.ProjectProposal = true;
+            }
+
+            if (nameOf == "BusinessCase")
+            {
+                result.BusinessCase = true;
+            }
+
+            if (nameOf == "BusinessRequirement")
+            {
+                result.BusinessRequirement = true;
+            }
+
+            if (nameOf == "TechnicalSpecification")
+            {
+                result.TechnicalSpecification = true;
+            }
+
+            if (nameOf == "TestCase")
+            {
+                result.TestCase = true;
+            }
+
+            if (nameOf == "UserManual")
+            {
+                result.UserManual = true;
+            }
+        }
+
+        return result;
+    }
+
+    public async Task<bool> UploadFiles(int applicationId, List<FileUploadModel>? models = null)
+    {
+
+        if (models != null)
+        {
+            foreach (var item in models)
+            {
+                if (item.UploadedFile != null)
+                {
+                    var file = item.UploadedFile;
+                    var folder = $"{applicationId}{item.ApplicationName.Replace(" ", "")}";
+                    var locationpath = Path.Combine(Settings.FileBaseUrl, folder);
+                    var ext = Path.GetExtension(item.UploadedFile.Name);
+                    string UploadURL = Path.Combine(Settings.FileBaseUrl, folder, $"{applicationId}{item.DocumentType.Replace(" ", "")}{ext}");
+
+                    bool exists = Directory.Exists(locationpath);
+                    if (!exists)
+                    {
+                        Directory.CreateDirectory(locationpath);
+                    }
+                    CopyFile(UploadURL, item.UploadedFile);
+                }
+            }
+        }
+
+        return await Task.FromResult(true);
+
+    }
+
+    private async void CopyFile(string Url, IBrowserFile file)
+    {
+        if (file.Size > 0)
+        {
+            using (FileStream saveStream = File.Create(Url, (int)file.Size))
+            {
+                await file.OpenReadStream(file.Size).CopyToAsync(saveStream);
+                await saveStream.FlushAsync();
+            }
+        }
+    }
+
+    private async Task BackToTop()
+    {
+        await JS.InvokeVoidAsync("backToTop");
+    }
+
+
+    //string serverPath = Settings.FileBaseUrl;
+    //if (!Directory.Exists(serverPath))
+    //{
+    //    Directory.CreateDirectory(serverPath);
+    //}
+
+
+
+
+    //foreach (var item in fileUploadModels)
+    //{
+
+    //    string filePath = serverPath + "\\" + $"{applicationId}{item.ApplicationName.Replace(" ", "")}" + "\\" + $"{applicationId}{item.DocumentType.Replace(" ", "")}";
+
+    //    using (Stream  ms= new MemoryStream())
+    //    {
+    //        await item.UploadedFile.OpenReadStream().CopyToAsync(ms);
+    //        File.WriteAllBytes((filePath), ms.);
+
+    //    }
+
+
+
+    //    if (item.UploadedFile != null)
+    //    {
+    //        string path = Path.Combine($"{applicationId}{item.ApplicationName.Replace(" ", "")}", $"{applicationId}{item.DocumentType.Replace(" ", "")}");
+
+    //        using (Stream fileStream = new FileStream(path, FileMode.Create))
+    //        {
+
+
+    //        }
+    //    }
+    //}
+
+    //return await Task.FromResult(true);
+    ///////////////////////////////////////////////
+    //string networkPath = Settings.FileBaseUrl;
+    //    NetworkCredential credential = new NetworkCredential(Settings.SharepointUsername, Settings.SharepointPassword);
+
+    //    foreach (var item in fileUploadModels)
+    //    {            //10.201.2.100 MPACT.NET
+    //        var file = item.UploadedFile;
+    //        string UploadURL = Path.Combine($"{applicationId}{item.ApplicationName.Replace(" ", "")}", $"{applicationId}{item.DocumentType.Replace(" ", "")}");
+    //        using (new ConnectToSharedFolder("10.201.2.100", credential))
+    //        {
+
+    //            using (FileStream fileStream = File.Create(UploadURL, (int)file.Size))
+    //            {
+    //                await file.OpenReadStream().CopyToAsync(fileStream);
+    //                fileStream.Close();
+    //            }
+    //        }
+    //    }
+    //    return await Task.FromResult(true);
+    //////////////////////////////////////////////////////////////
+    ///        //try
+    ///        //try//    Process cred = new Process();
+
+    //    cred.StartInfo.FileName = "net";
+    //    cred.StartInfo.Arguments = "\\spr1-gfs01\\sharename password/user:username \PERSISTENT:YES";
+    //    cred.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+    //    cred.Start();
+    //    cred.WaitForExit();
+    //    foreach (var item in fileUploadModels)
+    //    {
+    //        string path = Path.Combine($"{Settings.FileBaseUrl}", $"{applicationId}{item.ApplicationName.Replace(" ", "")}", $"{applicationId}{item.DocumentType.Replace(" ", "")}");
+    //        using (FileStream fs = File.Create(path))
+    //        {
+    //            await item.UploadedFile.OpenReadStream().CopyToAsync(fs);
+    //        }
+    //    }
+    //}
+    //catch (Exception e)
+    //{
+    //    errorMessage = e.InnerException.Message;
+    //    showError = true;
+    //}
+
+
+    //This one works but not for this case
+    //    try
+    //{
+    //    string networkPath = Settings.FileBaseUrl;
+    //    NetworkCredential credential = new NetworkCredential(Settings.SharepointUsername, Settings.SharepointPassword);
+    //    foreach (var item in fileUploadModels)
+    //    {
+    //        if (item.UploadedFile != null)
+    //        {
+    //            var file = item.UploadedFile;
+    //            var locationpath = Path.Combine(Settings.FileBaseUrl, $"{applicationId}{item.ApplicationName.Replace(" ", "")}");
+
+    //            var ext = item.UploadedFile.Name.Split('.');
+    //            string UploadURL = Path.Combine(Settings.FileBaseUrl, $"{applicationId}{item.ApplicationName.Replace(" ", "")}", $"{applicationId}{item.DocumentType.Replace(" ", "")}.{ext.LastOrDefault()}");
+
+    //            bool exists = Directory.Exists(locationpath);
+    //            if (!exists)
+    //            {
+    //                Directory.CreateDirectory(locationpath);
+        //            }
+
+    //            using (FileStream fileStream = File.Create(UploadURL, (int)file.Size))
+    //            {
+    //                await file.OpenReadStream().CopyToAsync(fileStream);
+    //                fileStream.Close();
+    //            }
+    //        }
+    //    }
+    //}
+    //catch (Exception e)
+    //{
+    //    errorMessage = e.InnerException.Message;
+    //    showError = true;
+    //}
+    ///    //{
+}
+

@@ -1,0 +1,83 @@
+﻿
+
+<div class="col-md-11">
+    <table class="table table-responsive  table-borderless">
+        <thead>
+            <tr>
+                <th style="font-size:1.2rem">View @entryType URL</th>
+            </tr>
+        </thead>
+    </table>
+    <div style="max-height:175px; overflow:auto;  direction: rtl;">
+        @if (entryType.ToLower() == "api" && resultModel.ApiList.Any())
+        {
+            <table class="table table-striped" style="max-height:100px; direction: ltr">
+                <tbody>
+                    @foreach (var item in resultModel.ApiList)
+                    {
+                        <tr>
+                            <td style="margin-top:auto;"><label style="width:100%;" for="@item.Name"> @item.Name </label></td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <input type="checkbox" class="togCheck" id="@item.Name" />
+                                <div class="togContent">
+                                    <ul>
+                                        <li>Dev - @item.Dev</li>
+                                        <li>UAT - @item.Uat</li>
+                                        <li>Prod - @item.Prod</li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+
+                </tbody>
+            </table>
+        }
+        else if (entryType.ToLower() == "service" && resultModel.ServiceList.Any())
+        {
+            <table class="table table-striped" style="max-height:150px; overflow-y:scroll; direction: ltr">
+                <tbody>
+                    @foreach (var item in resultModel.ServiceList)
+                    {
+                        <tr>
+                            <td style="margin-top:auto;"><label style="width:100%;" for="@item.Name"> @item.Name </label></td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <input type="checkbox" class="togCheck" id="@item.Name" />
+                                <div class="togContent">
+                                    <ul>
+                                        <li>Dev - @item.Dev</li>
+                                        <li>UAT - @item.Uat</li>
+                                        <li>Prod - @item.Prod</li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string entryType { get; set; } = string.Empty;
+    [Parameter]
+    public AddApplicationModel resultModel { get; set; } = new AddApplicationModel();
+    List<ApiUrlModel> apiUrlModels = new List<ApiUrlModel>();
+    List<ApiUrlModel> serviceUrlModels = new List<ApiUrlModel>();
+    ApiUrlModel urlModel = new ApiUrlModel();
+
+    bool openAddReference = false;
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+    }
+
+}
+

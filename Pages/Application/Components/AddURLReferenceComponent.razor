@@ -1,0 +1,185 @@
+﻿
+
+<div class="col-md-11">
+    <table class="table table-responsive table-borderless">
+        <thead>
+            <tr>
+                <th style="font-size:1.2rem">Add @entryType URL</th>
+                <th style="width:3em"><label style="font-size:1.8rem" for="@entryType"> + </label></th>
+            </tr>
+        </thead>
+        <tbody style="background-color:  #313030;">
+            <tr>
+                <td>
+                    <input type="checkbox" class="togCheck" id="@entryType" @bind="openAddReference" />
+                    <div class="togContent">
+                        <div class="row mb-2">
+                            <div class="col-3">
+                                <label style="color:white">Name:</label>
+                            </div>
+                            <div class="col-md-3">
+                                <input type="text" class="form-control" style="width:100%" id="urlModel.Name" @bind-value="urlModel.Name" />
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-3">
+                                <label style="color:white">Dev Link(URL):</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" class="form-control" style="width:100%" @bind-value="urlModel.Dev" />
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-3">
+                                <label style="color:white">UAT Link(URL):</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" class="form-control" style="width:100%" @bind-value="urlModel.Uat" />
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-3">
+                                <label style="color:white">Production Link(URL):</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" class="form-control" style="width:100%" @bind-value="urlModel.Prod" />
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-md-10">
+                                <label></label>
+                            </div>
+                            <div class="col-md-2" style="align-content:end">
+                                <input type="button" class="btn btn-primary" style="width:100%" value="Add" @onclick="onSubmit" />
+                            </div>
+                        </div>
+                    </div>
+                </td>
+                <td></td>
+            </tr>
+        </tbody>
+    </table>
+    <div style="max-height:175px; overflow-y:auto; direction: rtl;margin-top:0px">
+        @if (entryType.ToLower() == "api" && resultModel.ApiList.Any())
+        {
+            <table class="table table-striped" style="max-height:100px;direction: ltr">
+                <tbody>
+                    @foreach (var item in resultModel.ApiList)
+                    {
+                        <tr>
+                            <td><label style="width:100%;" for="@item.Name"> @item.Name </label></td>
+                            <td style="width:3rem;"><button type="button" class="btn btn-outline-danger" style="width:fit-content; align-content:safe center" @onclick="@(() => onRemoveUrl(item))">Remove</button></td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <input type="checkbox" class="togCheck" id="@item.Name" />
+                                <div class="togContent">
+                                    <ul>
+                                        <li>Dev - @item.Dev</li>
+                                        <li>UAT - @item.Uat</li>
+                                        <li>Prod - @item.Prod</li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+
+                </tbody>
+            </table>
+        }
+        else if (entryType.ToLower() == "service" && resultModel.ServiceList.Any())
+        {
+            <table class="table table-striped" style="max-height:150px; overflow-y:scroll;direction: ltr">
+                <tbody>
+                    @foreach (var item in resultModel.ServiceList)
+                    {
+                        <tr>
+                            <td><label style="width:100%;" for="@item.Name"> @item.Name </label></td>
+                            <td style="width:3rem;"><button type="button" class="btn btn-outline-danger" style="width:fit-content; align-content:safe center" @onclick="@(() => onRemoveUrl(item))">Remove</button></td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <input type="checkbox" class="togCheck" id="@item.Name" />
+                                <div class="togContent">
+                                    <ul>
+                                        <li>Dev - @item.Dev</li>
+                                        <li>UAT - @item.Uat</li>
+                                        <li>Prod - @item.Prod</li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string entryType { get; set; } = string.Empty;
+    [Parameter]
+    public AddApplicationModel resultModel { get; set; } = new AddApplicationModel();
+    List<ApiUrlModel> apiUrlModels = new List<ApiUrlModel>();
+    List<ApiUrlModel> serviceUrlModels = new List<ApiUrlModel>();
+    ApiUrlModel urlModel = new ApiUrlModel();
+
+    bool openAddReference = false;
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+    }
+
+    public void onSubmit()
+    {
+        if (entryType.ToLower() == "api")
+        {
+            AddApiToResult();
+        }
+        else if (entryType.ToLower() == "service")
+        {
+            AddServiceToResult();
+        }
+        openAddReference = false;
+    }
+
+    public void AddApiToResult()
+    {
+        resultModel.ApiList.Add(urlModel);
+        urlModel = new ApiUrlModel();
+    }
+
+    public void AddServiceToResult()
+    {
+        resultModel.ServiceList.Add(urlModel);
+        urlModel = new ApiUrlModel();
+    }
+
+    public void onRemoveUrl(ApiUrlModel model)
+    {
+        if (entryType.ToLower() == "api")
+        {
+            foreach (var item in resultModel.ApiList)
+            {
+                if (item == model)
+                {
+                    resultModel.ApiList.Remove(item);
+                    break;
+                }
+            }
+        }
+        else if (entryType.ToLower() == "service")
+        {
+            foreach (var item in resultModel.ServiceList)
+            {
+                if (item == model)
+                {
+                    resultModel.ServiceList.Remove(item);
+                }
+            }
+        }
+    }
+
+}

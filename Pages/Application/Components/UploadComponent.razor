@@ -1,0 +1,36 @@
+﻿@inject IJSRuntime JS
+<div class="row col-md-6 mb-3">
+    <div class="col-md-6">
+        <label>@documentType</label>
+    </div>
+    <div class="col-lg-4">
+        <InputFile OnChange="LoadFile" />
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public List<FileUploadModel> fileUploadModels { get; set; } = new List<FileUploadModel>();
+    [Parameter]
+    public string documentType { get; set; } = string.Empty;
+    [Parameter]
+    public string applicationName { get; set; } = string.Empty;
+
+    public void LoadFile(InputFileChangeEventArgs f)
+    {
+
+        var modelToRemove = fileUploadModels.Where(x => x.DocumentType == documentType).FirstOrDefault();
+        if (modelToRemove != null)
+        {
+            fileUploadModels.Remove(modelToRemove);
+        }
+
+        fileUploadModels.Add(new FileUploadModel
+            {
+                ApplicationName = applicationName,
+                DocumentType = documentType.Replace(" ", ""),
+                UploadedFile = f.File,
+                loaded = true
+            });
+    }
+}

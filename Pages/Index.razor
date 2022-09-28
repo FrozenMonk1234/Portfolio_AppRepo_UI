@@ -1,0 +1,264 @@
+﻿@page "/Index"
+@inject NavigationManager NAvManager
+@inject Blazored.SessionStorage.ISessionStorageService sessionStorage
+@inject IApplicationService applicationService
+@inject CustomAuthenticationProvider AuthorizationProvider
+<AuthorizeView Roles="user,admin">
+    @if (showError)
+    {
+        showSuccess = false;
+        <ErrorMessage Message="@errorMessage" />
+    }
+
+    @if (showSuccess)
+    {
+        showError = false;
+        <SuccessMessage Message="@successMessage" />
+    }
+
+    @if (showSpinner)
+    {
+        showError = false;
+        showSuccess = false;
+        <SpinnerModal Message="...Loading..." />
+    }
+
+    @if (showConfirm)
+    {
+        showError = false;
+        showSuccess = false;
+        showSpinner = false;
+        <ConfirmActionModal Message="Are you sure you want to delete this?" CloseModal="OnShowConfirmModal" Confirmed="OnConfirmedDelete"></ConfirmActionModal>
+    }
+
+
+    <center><h1>Application Repository</h1></center>
+    <div class="col-11" style="margin:auto;">
+        <button type="button" class="btn btn-primary" style="width: 15em; margin-left:auto;font:bolder" @onclick="OnAddApplication">Add New +</button>
+    </div>
+
+    &nbsp;
+    &nbsp;
+
+    <center>
+        <div class="col-md-11 row" style="bottom: 12px">
+            <input id="SearchIndexList" type="text" @bind-value="searchTerm" @bind-value:event="oninput" class="form-control float-start" style="width:100%; height:34px" placeholder="Search..." />
+        </div>
+    </center>
+    &nbsp;
+    @if (applicationModels.Any())
+    {
+        <center>
+            <div class="col-md-11" style="max-height: 70vh;overflow-y:auto">
+
+
+                <table class="table table-hover table-responsive shadow" style="width:100%;">
+
+                    <thead style="position:sticky;  top:0px">
+                        <tr>
+                            <th>Name</th>
+                            <th>Stage</th>
+                            <th>No. of APIs</th>
+                            <th>No. of Services</th>
+                            <th>Status</th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in filteredApplicationModels)
+                        {
+                            <tr>
+                                <td>@item.Name</td>
+                                <td>@item.Stage</td>
+                                <td>@item.ApiList.Count()</td>
+                                <td>@item.ServiceList.Count()</td>
+                                <td>
+                                    @if (item.IsActive)
+                                    {
+                                        <label style="color:limegreen">Live</label>
+                                    }
+                                    else
+                                    {
+                                        <label style="color:orange">InActive</label>
+                                    }
+                                </td>
+                                <td><center><buton class="btn btn-outline-dark float-end" @onclick="@(() => OnViewApplication(item.ID))">View</buton></center></td>
+                                <td><center><buton class="btn btn-outline-dark float-end" @onclick="@(() => EditApplication(item.ID))">Edit</buton></center></td>
+                                <td><center><buton class="btn btn-outline-primary float-end" @onclick="@(() => OnClickDelete(item.ID))">Delete</buton></center></td>
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+        </center>
+
+    }
+    else
+    {
+        <center> <h2> Something is'nt right :-( </h2> </center>
+    }
+</AuthorizeView>
+@code {
+    public string searchTerm = string.Empty;
+    List<AddApplicationModel> applicationModels = new List<AddApplicationModel>();
+    List<AddApplicationModel> filteredApplicationModels => applicationModels.Where(x =>
+          x.Name.ToLower().Contains(searchTerm.ToLower()) ||
+      x.Stage.ToLower().Contains(searchTerm.ToLower()) ||
+      x.URL.ToLower().Contains(searchTerm.ToLower())).ToList();
+
+    bool showSpinner
+    {
+        get; set;
+    } = false;
+    bool showError { get; set; } = false;
+    bool showSuccess { get; set; } = false;
+    string errorMessage = string.Empty;
+    string successMessage = string.Empty;
+    private bool showConfirm = false;
+    LogWorker logWorker = new();
+    protected override async Task OnInitializedAsync()
+    {
+        showSpinner = true;
+        await IsAuthenticated();
+        showSpinner = false;
+        await base.OnInitializedAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        applicationModels = await applicationService.GetAllApplications();
+        GenerateStats();
+        await base.OnParametersSetAsync();
+    }
+
+    public async Task IsAuthenticated()
+    {
+        var authState = await AuthorizationProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (!user.Identity.IsAuthenticated)
+        {
+            NAvManager.NavigateTo("/LogIn");
+        }
+    }
+
+    private void OnAddApplication()
+    {
+        NAvManager.NavigateTo("/AddApplication");
+    }
+
+    private async void EditApplication(int Id)
+    {
+        await sessionStorage.SetItemAsync("AppId", Id);
+        NAvManager.NavigateTo("/EditApplication");
+    }
+
+    private async void OnViewApplication(int Id)
+    {
+        await sessionStorage.SetItemAsync("AppId", Id);
+        NAvManager.NavigateTo("/ViewApplication");
+    }
+
+
+    private void OnShowConfirmModal(bool status)
+    {
+        showConfirm = status;
+    }
+
+    int appId = 0;
+
+    private async void OnConfirmedDelete(bool status)
+    {
+        try
+        {
+            showSpinner = true;
+            if (status)
+            {
+                await DeleteApplication(appId);
+                OnShowConfirmModal(false);
+            }
+        }
+        catch (Exception e)
+        {
+            logWorker.LogError(e);
+            errorMessage = "Failed to delete";
+            showError = true;
+        }
+        finally
+        {
+            showSpinner = false;
+            await base.OnInitializedAsync();
+        }
+
+    }
+
+    private void OnClickDelete(int Id)
+    {
+        appId = Id;
+        OnShowConfirmModal(true);
+    }
+
+    private async Task DeleteApplication(int Id)
+    {
+        var user = await sessionStorage.GetItemAsync<UserModel>("UserCredit");
+        var result = await applicationService.Delete(Id, user.Username);
+        if (result)
+        {
+            successMessage = "Record Deleted Successfully";
+            showSuccess = true;
+        }
+        else
+        {
+            errorMessage = "Delete Unsuccessful";
+            showError = true;
+        }
+    }
+
+    #region Generate stats
+    int AppCount = 0;
+    int APICount = 0;
+    int ServiceCount = 0;
+    int InActiveApps = 0;
+    int ActiveApps = 0;
+    int InactiveAPIs = 0;
+    int ActiveAPIs = 0;
+    int InactiveServices = 0;
+    int ActiveServices = 0;
+    private void GenerateStats()
+    {
+        AppCount = applicationModels.Count();
+        foreach (var item in applicationModels)
+        {
+            APICount += item.ApiList.Count();
+        }
+        foreach (var item in applicationModels)
+        {
+            ServiceCount += item.ServiceList.Count();
+        }
+
+        InActiveApps = applicationModels.Where(x => x.IsActive == false).Count();
+        ActiveApps = applicationModels.Where(x => x.IsActive == true).Count();
+
+        foreach (var item in applicationModels)
+        {
+            InactiveAPIs += item.ApiList.Where(x => x.status == false).Count();
+        }
+        foreach (var item in applicationModels)
+        {
+            ActiveAPIs += item.ApiList.Where(x => x.status == true).Count();
+        }
+        foreach (var item in applicationModels)
+        {
+            InactiveServices += item.ServiceList.Where(x => x.status == false).Count();
+        }
+        foreach (var item in applicationModels)
+        {
+            ActiveServices += item.ServiceList.Where(x => x.status == true).Count();
+        }
+    }
+    #endregion
+}

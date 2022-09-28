@@ -1,0 +1,241 @@
+﻿@page "/Admin"
+@inject NavigationManager NAvManager
+@inject Blazored.SessionStorage.ISessionStorageService sessionStorage
+@inject IUserService _userService
+@inject CustomAuthenticationProvider AuthorizationProvider
+@inject IJSRuntime JS
+<AuthorizeView Roles="admin">
+
+
+    @if (showError)
+    {
+        showSuccess = false;
+        showedit = false;
+        showNew = false;
+        showSpinner = false;
+        <ErrorMessage Message="@errorMessage" />
+    }
+
+    @if (showSuccess)
+    {
+        showError = false;
+        showedit = false;
+        showNew = false;
+        showSpinner = false;
+        <SuccessMessage Message="@successMessage" />
+    }
+
+    @if (showSpinner)
+    {
+        showedit = false;
+        showNew = false;
+        showError = false;
+        showSuccess = false;
+        <SpinnerModal Message="...Loading..." />
+    }
+
+    <center><h1>Administrator</h1></center>
+    <center>
+        <div class="col-11 row">
+            <h3>Users</h3>
+            <button type="button" class="btn btn-primary float-end" style="width: 15em;font:bolder" @onclick="@(() => showNewUser(true))">Add New +</button>
+        </div>
+    </center>
+    &nbsp;
+    <center>
+        <div class="col-md-11" style="top:2.5rem;max-height: 70vh;overflow-y:auto hidden; top:1.5em">
+            <table class="table table-hover table-responsive shadow" style="width:100%;">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Surname</th>
+                        <th>Username</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Users)
+                    {
+                        <tr>
+                            <td>@item.FirstName</td>
+                            <td>@item.LastName</td>
+                            <td>@item.Username</td>
+                            <td>
+                                @item.Role
+                            </td>
+                            <td>
+                                @if (@item.IsActive == true)
+                                {
+                                    <label style="color:limegreen">Active</label>
+                                }
+                                else
+                                {
+                                    <label style="color:red">Inactive</label>
+                                }
+                            </td>
+
+                            <td><button type="button" class="btn btn-outline-dark float-end" @onclick="@(() => OnEditClick(@item.Id))">Edit</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </center>
+
+
+    @if (showedit)
+    {
+        showError = false;
+        showSuccess = false;
+        showSpinner = false;
+        showNew = false;
+        <CaptureUserDetailComponent Heading="Edit" User="User" CloseModal="showEditUser" Confirmed="OnSubmitEditUser"></CaptureUserDetailComponent>
+    }
+
+    @if (showNew)
+    {
+        showError = false;
+        showSuccess = false;
+        showSpinner = false;
+        showedit = false;
+        <CaptureUserDetailComponent Heading="Add New" User="User" CloseModal="showNewUser" Confirmed="OnSubmitNewUser"></CaptureUserDetailComponent>
+    }
+
+</AuthorizeView>
+@code {
+    bool showSpinner { get; set; } = false;
+    bool showError { get; set; } = false;
+    bool showSuccess { get; set; } = false;
+    string errorMessage = string.Empty;
+    string successMessage = string.Empty;
+    bool showedit = false;
+    bool showNew = false;
+    List<UserModel> Users = new List<UserModel>();
+    UserModel User = new UserModel();
+    LogWorker logWorker = new();
+    protected override async Task OnInitializedAsync()
+    {
+        await IsAuthenticated();
+        try
+        {
+            Users = await _userService.GetAll();
+        }
+        catch (Exception e)
+        {
+            logWorker.LogError(e);
+            errorMessage = e.InnerException.Message;
+            showError = true;
+        }
+        finally
+        {
+            await base.OnInitializedAsync();
+        }
+    }
+
+    UserModel LoggedInUser = new UserModel();
+    protected override async Task OnParametersSetAsync()
+    {
+        LoggedInUser = await sessionStorage.GetItemAsync<UserModel>("UserCredit");
+        await base.OnParametersSetAsync();
+    }
+
+    private async Task IsAuthenticated()
+    {
+        var authState = await AuthorizationProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (!user.Identity.IsAuthenticated)
+        {
+            NAvManager.NavigateTo("/LogIn");
+        }
+    }
+
+    private async Task OnEditClick(int Id)
+    {
+        try
+        {
+            User = new UserModel();
+            User = await _userService.GetById(Id);
+            showEditUser(true);
+        }
+        catch (Exception e)
+        {
+            logWorker.LogError(e);
+            errorMessage = e.InnerException.Message;
+            showError = true;
+            await BackToTop();
+        }
+    }
+
+    private void showNewUser(bool status)
+    {
+        User = new UserModel();
+        showNew = status;
+    }
+
+    private void showEditUser(bool status)
+    {
+        showedit = status;
+    }
+
+    private async void OnSubmitNewUser(UserModel model)
+    {
+        try
+        {
+            model.DateCreated = DateTime.Now;
+            model.IsActive = true;
+            model.LoggedInUser = LoggedInUser.Username;
+            var result = await _userService.Create(model);
+            if (!result)
+            {
+                errorMessage = $"{model.Username} not saved.";
+                showError = true;
+            }
+        }
+        catch (Exception e)
+        {
+            logWorker.LogError(e);
+            errorMessage = e.InnerException.Message;
+            showError = true;
+            await BackToTop();
+        }
+        finally
+        {
+            showNewUser(false);
+            await base.OnInitializedAsync();
+        }
+    }
+
+    private async void OnSubmitEditUser(UserModel model)
+    {
+        try
+        {
+            model.DateModified = DateTime.Now;
+            model.LoggedInUser = LoggedInUser.Username;
+            var result = await _userService.Update(model);
+            if (!result)
+            {
+                errorMessage = $"Something went wrong '{model.Username}' not saved.";
+                showError = true;
+            }
+        }
+        catch (Exception e)
+        {
+            logWorker.LogError(e);
+            errorMessage = e.InnerException.Message;
+            showError = true;
+            await BackToTop();
+        }
+        finally
+        {
+            showEditUser(false);
+            await base.OnInitializedAsync();
+        }
+    }
+
+    private async Task BackToTop()
+    {
+        await JS.InvokeVoidAsync("backToTop");
+    }
+}

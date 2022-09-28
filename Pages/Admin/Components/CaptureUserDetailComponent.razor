@@ -1,0 +1,85 @@
+﻿<div class="modal show fade" style="display:inline-block" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content" style="color:black;">
+            <div class="modal-header">
+                <h5 class="modal-title">@Heading User</h5>
+                <button type="button" class="btn-close" @onclick="closeWindow">
+                </button>
+            </div>
+            <div class="modal-body" style="padding:5%">
+                <div class="row mb-2">
+                    <div></div>
+                    <label>Name:</label>
+                    <input type="text" class="form-control" style="width:100%; padding:5px" @bind-value="model.FirstName" />
+                </div>
+                <div class="row mb-2">
+                    <div></div>
+                    <label>Surname:</label>
+                    <input type="text" class="form-control" style="width:100%; padding:5px" @bind-value="model.LastName" />
+                </div>
+                <div class="row mb-2">
+                    <div></div>
+                    <label>Username:</label>
+                    <input type="text" class="form-control" style="width:100%; padding:5px" @bind-value="model.Username" />
+                </div>
+                <div class="row mb-2">
+                    <div></div>
+                    <label>Role:</label>
+                    <select @bind="model.Role" class="form-control" style="padding:5px;">
+                        <option value="">Select...</option>
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                @if (Heading == "Edit")
+                {
+                    <div class="row mb-2">
+                        <div></div>
+                        <label>Active:</label>
+                        <input type="checkbox" class="form-check" @bind="model.IsActive" />
+                    </div>
+                }
+
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="ContinueAction">Save</button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public EventCallback<bool> CloseModal { get; set; }
+    [Parameter]
+    public EventCallback<UserModel> Confirmed { get; set; } = new EventCallback<UserModel>();
+    [Parameter]
+    public UserModel User { get; set; } = new UserModel();
+    public UserModel model = new UserModel();
+    [Parameter]
+    public string? Heading { get; set; }
+
+    protected override Task OnInitializedAsync()
+    {
+        model = User;
+        return base.OnInitializedAsync();
+    }
+
+    public async void closeWindow()
+    {
+        await CloseModal.InvokeAsync(false);
+    }
+
+    public async void ContinueAction()
+    {
+        User = new UserModel();
+        User = model;
+        await Confirmed.InvokeAsync(model);
+    }
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+    }
+}

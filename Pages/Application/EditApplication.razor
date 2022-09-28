@@ -1,0 +1,267 @@
+﻿@page "/EditApplication"
+@inject Blazored.SessionStorage.ISessionStorageService sessionStorage
+@inject NavigationManager NAvManager
+@inject IApplicationService applicationService
+@inject CustomAuthenticationProvider AuthorizationProvider
+@inject IJSRuntime JS
+
+@if (showError == true)
+{
+    showSuccess = false;
+    <ErrorMessage Message="@errorMessage" />
+}
+
+@if (showSuccess == true)
+{
+    showError = false;
+    <SuccessMessage Message="@successMessage" />
+}
+
+@if (showSpinner == true)
+{
+    showError = false;
+    showSuccess = false;
+    <SpinnerModal Message="...Loading..." />
+}
+
+<center><h1>Edit Entry Detail</h1></center>
+
+&nbsp;
+&nbsp;
+<div class="col-12" style="transition:height 2s">
+    <div class="row col-md-7 mb-3">
+        <div class="col-4">
+            <label><label style="color:red">*</label>Stage:</label>
+        </div>
+        <div class="col-md-6 row">
+            <div class="col-6" style="width:70%">
+                <select @bind="resultModel.Stage" class="form-control">
+                    <option value="">select..</option>
+                    <option value="Dev">Dev</option>
+                    <option value="Uat">Uat</option>
+                    <option value="Prod">Prod</option>
+                </select>
+            </div>
+            <div class="row col-2">
+                <input @bind="resultModel.IsActive" type="checkbox" /> <label>IsActive</label>
+            </div>
+        </div>
+    </div>
+    <div class="row col-md-7 mb-3">
+        <div class="col-4">
+            <label><label style="color:red">*</label>Link (URL):</label>
+        </div>
+        <div class="col-lg-6">
+            <input type="text" class="form-control" style="width:100%;" @bind-value="resultModel.URL" />
+        </div>
+    </div>
+    <div class="row col-md-7 mb-3">
+        <div class="col-4">
+            <label><label style="color:red">*</label>Name:</label>
+        </div>
+        <div class="col-lg-6">
+            <input type="text" class="form-control" style="width:100%;" @bind-value="resultModel.Name" />
+        </div>
+    </div>
+    <div class=" row col-md-7 mb-3">
+        <div class="col-4">
+            <label>Description:</label>
+        </div>
+        <div class="col-lg-6">
+            <textarea rows="5" class="form-control" style="width:100%; height:150px" placeholder="" @bind="resultModel.Description"></textarea>
+        </div>
+    </div>
+</div>
+&nbsp;
+<h3>Add Endpoint URLs</h3>
+<AddURLReferenceComponent entryType="API" resultModel="@resultModel"></AddURLReferenceComponent>
+&nbsp;
+<AddURLReferenceComponent entryType="Service" resultModel="@resultModel"></AddURLReferenceComponent>
+
+<h3 style="margin-top:1.5rem;margin-bottom:1rem">Replace Files</h3>
+<div class="row col-12">
+    <div class="col-md-6">
+        <UploadComponent applicationName="@resultModel.Name" documentType="Project Proposal" fileUploadModels="fileUploadModels"></UploadComponent>
+        <UploadComponent applicationName="@resultModel.Name" documentType="Business Case" fileUploadModels="fileUploadModels"></UploadComponent>
+        <UploadComponent applicationName="@resultModel.Name" documentType="Business Requirement" fileUploadModels="fileUploadModels"></UploadComponent>
+    </div>
+    <div class="col-md-6">
+        <UploadComponent applicationName="@resultModel.Name" documentType="Technical Specification" fileUploadModels="fileUploadModels"></UploadComponent>
+        <UploadComponent applicationName="@resultModel.Name" documentType="Test Case" fileUploadModels="fileUploadModels"></UploadComponent>
+        <UploadComponent applicationName="@resultModel.Name" documentType="User Manual" fileUploadModels="fileUploadModels"></UploadComponent>
+    </div>
+</div>
+
+<div class="col-sm-7" style="margin-right:auto;margin-left:auto ;padding-bottom:5vh;padding-top:5vh">
+    <input type="button" class="btn btn-primary" style="min-width:fit-content;width:47%;font-size:18px" value="Save" @onclick="OnClickSave" />
+    <input type="button" class="btn btn-danger" style="min-width:fit-content;width:47%;font-size:18px" value="Cancel" @onclick="OnCancel" />
+</div>
+
+@if (showConfirm == true)
+{
+    showError = false;
+    showSuccess = false;
+    showSpinner = false;
+    <ConfirmActionModal Message="Are you sure you want to update this?" CloseModal="OnShowConfirmModal" Confirmed="OnConfirmed"></ConfirmActionModal>
+}
+
+@code {
+    bool showSpinner { get; set; } = false;
+    bool showError { get; set; } = false;
+    bool showSuccess { get; set; } = false;
+    string errorMessage = string.Empty;
+    string successMessage = string.Empty;
+    AddApplicationModel resultModel = new AddApplicationModel();
+    List<FileUploadModel> fileUploadModels = new List<FileUploadModel>();
+    string LoggedInUser = string.Empty;
+
+    private readonly AddApplication addApplication = new AddApplication();
+    LogWorker logWorker = new();
+
+    bool? showConfirm = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        showSpinner = true;
+        try
+        {
+            await IsAuthenticated();
+            int Id = await sessionStorage.GetItemAsync<int>("AppId");
+            resultModel = await applicationService.GetApplicationById(Id);
+            var LoggedIn = await sessionStorage.GetItemAsync<UserModel>("UserCredit");
+            LoggedInUser = LoggedIn.Username;
+        }
+        catch (Exception e)
+        {
+            logWorker.LogError(e);
+            errorMessage = e.InnerException.Message;
+            showError = true;
+            await BackToTop();
+        }
+        finally
+        {
+            showSpinner = false;
+            await base.OnInitializedAsync();
+        }
+    }
+
+    private async Task IsAuthenticated()
+    {
+        var authState = await AuthorizationProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (!user.Identity.IsAuthenticated)
+        {
+            NAvManager.NavigateTo("/LogIn");
+        }
+    }
+
+    private async Task OnClickSave()
+    {
+        if (string.IsNullOrWhiteSpace(resultModel.Name))
+        {
+            errorMessage = "Please make sure you filled in all required fields.";
+            showError = true;
+            await BackToTop();
+        }
+        else if (string.IsNullOrWhiteSpace(resultModel.URL))
+        {
+            errorMessage = "Please make sure you filled in all required fields.";
+            showError = true;
+            await BackToTop();
+        }
+        else if (string.IsNullOrWhiteSpace(resultModel.Stage))
+        {
+            errorMessage = "Please make sure you filled in all required fields.";
+            showError = true;
+            await BackToTop();
+        }
+        else
+        {
+            
+
+            OnShowConfirmModal(true);
+        }
+
+    }
+
+    private async void OnConfirmed(bool status)
+    {
+        if (status)
+        {
+            OnShowConfirmModal(false);
+            await OnSaveAsync();
+        }
+    }
+
+    private void OnShowConfirmModal(bool status)
+    {
+        showConfirm = status;
+    }
+
+    public async Task OnSaveAsync()
+    {
+        showSpinner = true;
+        try
+        {
+            resultModel.FileNameModel = new ApplicationFileModel();
+            var fileRecordModel = addApplication.BuildFileRecordModel(fileUploadModels);
+            resultModel.FileNameModel = fileRecordModel;
+            resultModel.User = LoggedInUser;
+            var appUpdated = await applicationService.Update(resultModel);
+            if (appUpdated)
+            {
+                if (fileUploadModels.Any())
+                {
+                    var uploadResult = UploadFiles(resultModel.ID);
+                }
+
+                NAvManager.NavigateTo("Index");
+            }
+            else
+            {
+                errorMessage = "Unable to update ";
+                showError = true;
+            }
+        }
+        catch (Exception e)
+        {
+            logWorker.LogError(e);
+            errorMessage = e.InnerException.Message;
+            showError = true;
+            await BackToTop();
+        }
+        finally
+        {
+            showSpinner = false;
+            this.StateHasChanged();
+        }
+    }
+
+    public void OnCancel()
+    {
+        NAvManager.NavigateTo("/Index");
+    }
+
+    public async Task UploadFiles(int applicationId)
+    {
+        DirectoryInfo directoryInfo = new DirectoryInfo(Settings.FileBaseUrl);
+        var folderList = directoryInfo.GetDirectories(applicationId.ToString());
+        var focusFolder = folderList.FirstOrDefault(x => x.Name.Contains(applicationId.ToString()));
+        if (focusFolder != null)
+        {
+            foreach (var file in fileUploadModels)
+            {
+                var fileUrl = Path.Combine(focusFolder.FullName, $"{applicationId}{file.DocumentType}");
+                if (File.Exists(fileUrl))
+                {
+                    File.Delete(fileUrl);
+                }
+            }
+        }
+        await addApplication.UploadFiles(applicationId, fileUploadModels);
+    }
+    private async Task BackToTop()
+    {
+        await JS.InvokeVoidAsync("backToTop");
+    }
+}

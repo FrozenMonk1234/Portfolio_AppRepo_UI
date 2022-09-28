@@ -1,0 +1,269 @@
+﻿@page "/ViewApplication"
+@inject Blazored.SessionStorage.ISessionStorageService sessionStorage
+@inject IApplicationService applicationService
+@inject NavigationManager NAvManager
+@inject CustomAuthenticationProvider AuthorizationProvider
+@using System.Diagnostics
+@inject IJSRuntime JS
+
+
+@if (showError == true)
+{
+    showSuccess = false;
+    <ErrorMessage Message="@errorMessage" />
+}
+
+@if (showSuccess == true)
+{
+    showError = false;
+    <SuccessMessage Message="@successMessage" />
+}
+
+@if (showSpinner == true)
+{
+    showError = false;
+    showSuccess = false;
+    <SpinnerModal Message="...Loading..." />
+}
+
+<center><h1>View Entry Detail</h1></center>
+
+&nbsp;
+&nbsp;
+<div class="col-12">
+    <div class="row col-md-7 mb-3">
+        <div class="col-4">
+            <label><label style="color:red">*</label>Stage:</label>
+        </div>
+        <div class="col-md-6 row">
+            <div class="col-6" style="width:80%">
+                <input type="text" class="form-control" @bind-value="resultModel.Stage" readonly />
+            </div>
+            <div class="row col-2">
+                @if (resultModel.IsActive)
+                {
+                    <label>IsActive</label>
+                }
+                else
+                {
+                    <label>InActive</label>
+                }
+
+            </div>
+        </div>
+    </div>
+    <div class="row col-md-7 mb-3">
+        <div class="col-4">
+            <label><label style="color:red">*</label>Link (URL):</label>
+        </div>
+        <div class="col-lg-6">
+            <input type="text" class="form-control" style="width:100%;" @bind-value="resultModel.URL" readonly />
+        </div>
+    </div>
+    <div class="row col-md-7 mb-3">
+        <div class="col-4">
+            <label><label style="color:red">*</label>Name:</label>
+        </div>
+        <div class="col-lg-6">
+            <input type="text" class="form-control" style="width:100%;" @bind-value="resultModel.Name" readonly />
+        </div>
+    </div>
+    <div class=" row col-md-7 mb-3">
+        <div class="col-4">
+            <label>Description:</label>
+        </div>
+        <div class="col-lg-6">
+            <textarea rows="5" class="form-control" style="width:100%; height:150px" placeholder="" @bind="resultModel.Description" readonly></textarea>
+        </div>
+    </div>
+</div>
+&nbsp;
+<h3>Add Endpoint URLs</h3>
+<ViewUrlReferenceComponent entryType="API" resultModel="@resultModel"></ViewUrlReferenceComponent>
+&nbsp;
+<ViewUrlReferenceComponent entryType="Service" resultModel="@resultModel"></ViewUrlReferenceComponent>
+
+<h3 style="margin-top:1.5rem;margin-bottom:1rem">Documents:</h3>
+<div class="row col-12">
+
+    <div class="col-md-6">
+        @if (resultModel.FileNameModel.ProjectProposal)
+        {
+            <DownloadComponent ShowError="InvokeError" applicationId="@resultModel.ID" documentType="Project Proposal" ifUploaded="resultModel.FileNameModel.ProjectProposal" DeleteFilesFromTemp="GetFolderToDelete"></DownloadComponent>
+        }
+        @if (resultModel.FileNameModel.BusinessCase)
+        {
+            <DownloadComponent ShowError="InvokeError" applicationId="@resultModel.ID" documentType="Business Case" ifUploaded="resultModel.FileNameModel.BusinessCase" DeleteFilesFromTemp="GetFolderToDelete"></DownloadComponent>
+        }
+        @if (resultModel.FileNameModel.BusinessRequirement)
+        {
+            <DownloadComponent ShowError="InvokeError" applicationId="@resultModel.ID" documentType="Business Requirement" ifUploaded="resultModel.FileNameModel.BusinessRequirement" DeleteFilesFromTemp="GetFolderToDelete"></DownloadComponent>
+        }
+    </div>
+    <div class="col-md-6">
+        @if (resultModel.FileNameModel.TechnicalSpecification)
+        {
+            <DownloadComponent ShowError="InvokeError" applicationId="@resultModel.ID" documentType="Technical Specification" ifUploaded="resultModel.FileNameModel.TechnicalSpecification" DeleteFilesFromTemp="GetFolderToDelete"></DownloadComponent>
+        }
+        @if (resultModel.FileNameModel.TestCase)
+        {
+            <DownloadComponent ShowError="InvokeError" applicationId="@resultModel.ID" documentType="Test Case" ifUploaded="resultModel.FileNameModel.TestCase" DeleteFilesFromTemp="GetFolderToDelete"></DownloadComponent>
+        }
+        @if (resultModel.FileNameModel.UserManual)
+        {
+            <DownloadComponent ShowError="InvokeError" applicationId="@resultModel.ID" documentType="User Manual" ifUploaded="resultModel.FileNameModel.UserManual" DeleteFilesFromTemp="GetFolderToDelete"></DownloadComponent>
+        }
+    </div>
+</div>
+
+<div class="col-sm-7" style="margin-right:auto;margin-left:auto ;padding-bottom:5vh;padding-top:5vh">
+    <input type="button" class="btn btn-danger" style="min-width:fit-content;width:47%;font-size:18px" value="Cancel" @onclick="OnCancel" />
+</div>
+
+
+@code {
+    bool showSpinner { get; set; } = false;
+    bool showError { get; set; } = false;
+    bool showSuccess { get; set; } = false;
+    string? errorMessage = string.Empty;
+    string successMessage = string.Empty;
+    string folderPath = string.Empty;
+    AddApplicationModel resultModel = new AddApplicationModel();
+    LogWorker logWorker = new();
+    protected override async void OnInitialized()
+    {
+        showSpinner = true;
+        await IsAuthenticated();
+        try
+        {
+            int Id = await sessionStorage.GetItemAsync<int>("AppId");
+            resultModel = await applicationService.GetApplicationById(Id);
+
+        }
+        catch (Exception? e)
+        {
+            logWorker.LogError(e);
+            errorMessage = e.InnerException.Message;
+            showError = true;
+            await BackToTop();
+        }
+        finally
+        {
+            showSpinner = false;
+            this.StateHasChanged();
+        }
+    }
+
+    private async Task IsAuthenticated()
+    {
+        var authState = await AuthorizationProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (!user.Identity.IsAuthenticated)
+        {
+            NAvManager.NavigateTo("/LogIn");
+        }
+    }
+
+    public void OnCancel()
+    {
+        NAvManager.NavigateTo("/Index");
+    }
+
+    public async Task OpenFolder()
+    {
+        try
+        {
+            var folderNameList = await getFolderNamesFromDirectory();
+            var folderName = folderNameList.FirstOrDefault(x => x.Contains(resultModel.ID.ToString()));
+            var FileLink = $@"{Settings.FileBaseUrl}\\{folderName}\";
+            Process.Start(new ProcessStartInfo()
+                {
+                    FileName = FileLink,
+                    UseShellExecute = true,
+                    Verb = "open",
+                    Arguments = FileLink
+                });
+
+        }
+        catch (Exception? e)
+        {
+            errorMessage = e.InnerException.Message;
+            showError = true;
+            await BackToTop();
+        }
+        NAvManager.NavigateTo("/ViewApplication");
+    }
+
+    private async Task<List<string>> getFolderNamesFromDirectory()
+    {
+        DirectoryInfo directoryInfo = new DirectoryInfo(Settings.FileBaseUrl);
+        var folder = directoryInfo.GetDirectories().ToList();
+        List<string> result = new();
+
+        foreach (var item in folder)
+        {
+            result.Add(item.Name);
+        }
+
+        return await Task.FromResult(result);
+    }
+
+    private async Task<List<FileInfo>> getFileNamesFromDirectory(string Url)
+    {
+        DirectoryInfo directoryInfo = new DirectoryInfo(Url);
+        var files = directoryInfo.GetFiles().ToList();
+
+        return await Task.FromResult(files);
+    }
+
+    private async void GetFolderToDelete(string path)
+    {
+        try
+        {
+            await Task.Delay(4000);
+            Directory.Delete(path, true);
+        }
+        catch (Exception e)
+        {
+            logWorker.LogError(e);
+            await BackToTop();
+        }
+    }
+
+    private async Task BackToTop()
+    {
+        await JS.InvokeVoidAsync("backToTop");
+    }
+
+    public async Task InvokeError(string message)
+    {
+        errorMessage = message;
+        showError = true;
+        await BackToTop();
+    }
+
+    //public async Task OpenFolder()
+    //{
+    //    try
+    //    {
+    //        var folderNameList = await getFolderNamesFromDirectory();
+    //        var folderName = folderNameList.FirstOrDefault(x => x.Contains(resultModel.ID.ToString()));
+    //        var FileLink = $@"{Settings.FileBaseUrl}\\{folderName}\";
+    //        Process.Start(new ProcessStartInfo()
+    //            {
+    //                FileName = FileLink,
+    //                UseShellExecute = true,
+    //                Verb = "open",
+    //                Arguments = FileLink
+    //            });
+
+    //    }
+    //    catch (Exception e)
+    //    {
+    //        errorMessage = e.InnerException.Message;
+    //        showError = true;
+    //    }
+    //    NAvManager.NavigateTo("/ViewApplication");
+    //}
+}

@@ -1,0 +1,192 @@
+﻿@inject IJSRuntime JS
+@inject NavigationManager NAvManager
+@inject Blazored.SessionStorage.ISessionStorageService sessionStorage
+@inject CustomAuthenticationProvider AuthorizationProvider
+<div class="row col-md-6 mb-3">
+    <div class="col-md-6">
+        <label>@documentType</label>
+    </div>
+    <div class="col-lg-4">
+        @if (ifUploaded)
+        {
+            <button type="button" @onclick="OnClickDownloadAsync" class="btn btn-primary oi oi-cloud-download" style="font-size:smaller; width:min-content; height:min-content"> Download</button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public bool ifUploaded { get; set; }
+    [Parameter]
+    public string documentType { get; set; } = string.Empty;
+    [Parameter]
+    public int applicationId { get; set; }
+    [Parameter]
+    public EventCallback<string> DeleteFilesFromTemp { get; set; }
+    [Parameter]
+    public EventCallback<string> ShowError { get; set; }
+
+    public UserModel? LoggedInUser { get; set; }
+    LogWorker logWorker = new();
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (await sessionStorage.ContainKeyAsync("UserCredit"))
+        {
+            LoggedInUser = await sessionStorage.GetItemAsync<UserModel>("UserCredit");
+        }
+        else
+        {
+            await IsAuthenticated();
+        }
+
+        await base.OnParametersSetAsync();
+    }
+
+    private async Task IsAuthenticated()
+    {
+        var authState = await AuthorizationProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (!user.Identity.IsAuthenticated)
+        {
+            NAvManager.NavigateTo("/LogIn");
+        }
+    }
+
+    private async Task OnClickDownloadAsync()
+    {
+        try
+        {
+
+            var foundFile = await GetSourceFileInfo();
+            if (foundFile != null)
+            {
+                var currentDirectory = Directory.GetCurrentDirectory();
+                currentDirectory = Path.Combine(currentDirectory, "wwwroot", "Temp", LoggedInUser.Username);
+                Directory.CreateDirectory(currentDirectory);
+
+                string destination = Path.Combine(currentDirectory, foundFile.Name);
+                var source = foundFile.FullName;
+
+                using (FileStream fileStream = File.Open(source, FileMode.Open))
+                {
+                    fileStream.SetLength(fileStream.Length);
+                    using (FileStream fs = File.Create(destination, (int)fileStream.Length))
+                    {
+                        await fileStream.CopyToAsync(fs);
+                    }
+                }
+
+                await TriggerDownload(foundFile.Name, LoggedInUser.Username);
+
+                await DeleteFilesFromTemp.InvokeAsync(currentDirectory);
+            }
+            else
+            {
+                await ShowError.InvokeAsync("File does not exist.");
+            }
+        }
+        catch (Exception? e)
+        {
+            logWorker.LogError(e);
+            await ShowError.InvokeAsync(e.Message);
+        }
+
+    }
+
+    private async Task TriggerDownload(string fileName, string userFolder)
+    {
+        var fileUrl = @$"{Settings.DownloadHostUrl}{userFolder}/{fileName}";
+        await JS.InvokeVoidAsync("triggerFileDownload", fileName, fileUrl);
+    }
+
+    private async Task<FileInfo?> GetSourceFileInfo()
+    {
+
+        var folderNameList = await getFolderNamesFromDirectory();
+        if (folderNameList.Any())
+        {
+            var folderName = folderNameList.FirstOrDefault(x => x.Contains(applicationId.ToString()));
+            if (!string.IsNullOrWhiteSpace(folderName))
+            {
+                string folderURL = @$"{Settings.FileBaseUrl}\\{folderName}";
+                var files = await getFileNamesFromDirectory(folderURL);
+                if (files.Any())
+                {
+                    var fileName = $"{applicationId}{documentType.Replace(" ", "")}";
+                    var foundFile = files.FirstOrDefault(x => x.Name.Contains(fileName));
+                    if (foundFile != null)
+                    {
+                        return foundFile;
+                    }
+                    else
+                        return null;
+                }
+                else
+                    return null;
+            }
+            else
+                return null;
+        }
+        else
+            return null;
+    }
+
+    private async Task<List<string>> getFolderNamesFromDirectory()
+    {
+        DirectoryInfo directoryInfo = new DirectoryInfo(Settings.FileBaseUrl);
+        var folder = directoryInfo.GetDirectories().ToList();
+        List<string> result = new();
+
+        foreach (var item in folder)
+        {
+            result.Add(item.Name);
+        }
+
+        return await Task.FromResult(result);
+    }
+
+    private async Task<List<FileInfo>> getFileNamesFromDirectory(string Url)
+    {
+        DirectoryInfo directoryInfo = new DirectoryInfo(Url);
+        var files = directoryInfo.GetFiles().ToList();
+
+        return await Task.FromResult(files);
+    }
+    //private async Task OnClickDownloadAsync()
+    //{
+    //    try
+    //    {
+
+
+    //        var fileName = $"{applicationId}{documentType.Replace(" ", "")}";
+
+
+    //        var files = await getFileNamesFromDirectory(folderURL);
+
+    //        var foundFile = files.FirstOrDefault(x => x.Name.Contains(fileName));
+    //        if (!string.IsNullOrWhiteSpace(foundFile.Name))
+    //        {
+    //            var currentDirectory = Directory.GetCurrentDirectory();
+    //            currentDirectory = Path.Combine(currentDirectory, "DownloadHolder");
+    //            File.Copy(foundFile.FullName, currentDirectory);
+    //            var fileUrl = Path.Combine(Settings.FileBaseUrl, folderName, foundFile.Name);
+    //            await JS.InvokeVoidAsync("triggerFileDownload", foundFile.Name, fileUrl);
+    //        }
+
+    //        NAvManager.NavigateTo("/ViewApplication");
+    //    }
+    //    catch (Exception e)
+    //    {
+
+    //        throw;
+    //    }
+
+    //}
+}
